@@ -1,0 +1,1006 @@
+From 8890cc6cdfa840ab0b75065d4763d353b1f5f186 Mon Sep 17 00:00:00 2001
+From: "Yago Rubio (iago)" <iago@iagorubio.com>
+Date: Mon, 23 Aug 2021 21:55:30 +0200
+Subject: [PATCH 1/2] Issue #19 'Import Creating RPM Packages from QuickDocs'
+ https://pagure.io/fedora-docs/package-maintainer-docs/issue/19
+
+---
+ modules/ROOT/.#nav.adoc                       |   1 +
+ modules/ROOT/nav.adoc                         |   3 +
+ .../ROOT/pages/create-hello-world-rpm.adoc    | 263 ++++++++++++++++++
+ modules/ROOT/pages/creating-rpm-packages.adoc |  18 ++
+ modules/ROOT/pages/publish-rpm-on-copr.adoc   | 257 +++++++++++++++++
+ modules/ROOT/partials/.#attributes.adoc       |   1 +
+ modules/ROOT/partials/attributes.adoc         |   1 +
+ .../partials/con_rpm_packaging_overview.adoc  |  49 ++++
+ .../partials/con_rpm_spec_file_overview.adoc  | 106 +++++++
+ .../partials/proc_rpm_creating_an_rpm.adoc    | 142 ++++++++++
+ .../proc_rpm_preparing_your_system.adoc       |  34 +++
+ modules/ROOT/partials/unreviewed-message.adoc |  17 ++
+ 12 files changed, 892 insertions(+)
+ create mode 120000 modules/ROOT/.#nav.adoc
+ create mode 100644 modules/ROOT/pages/create-hello-world-rpm.adoc
+ create mode 100644 modules/ROOT/pages/creating-rpm-packages.adoc
+ create mode 100644 modules/ROOT/pages/publish-rpm-on-copr.adoc
+ create mode 120000 modules/ROOT/partials/.#attributes.adoc
+ create mode 100644 modules/ROOT/partials/con_rpm_packaging_overview.adoc
+ create mode 100644 modules/ROOT/partials/con_rpm_spec_file_overview.adoc
+ create mode 100644 modules/ROOT/partials/proc_rpm_creating_an_rpm.adoc
+ create mode 100644 modules/ROOT/partials/proc_rpm_preparing_your_system.adoc
+ create mode 100644 modules/ROOT/partials/unreviewed-message.adoc
+
+diff --git a/modules/ROOT/.#nav.adoc b/modules/ROOT/.#nav.adoc
+new file mode 120000
+index 0000000..87c459b
+--- /dev/null
++++ b/modules/ROOT/.#nav.adoc
+@@ -0,0 +1 @@
++iago@telaar.localdomain.99824:1629619821
+\ No newline at end of file
+diff --git a/modules/ROOT/nav.adoc b/modules/ROOT/nav.adoc
+index 1848a38..b0a3714 100644
+--- a/modules/ROOT/nav.adoc
++++ b/modules/ROOT/nav.adoc
+@@ -4,6 +4,9 @@
+ * New Package Process
+ ** xref:New_Package_Process_for_Existing_Contributors.adoc[for Existing Contributors]
+ ** xref:New_Package_Process_for_New_Contributors.adoc[for New Contributors]
++* xref:creating-rpm-packages.adoc[Creating RPM packages]
++** xref:create-hello-world-rpm.adoc[Creating a GNU Hello World RPM Package]
++** xref:publish-rpm-on-copr.adoc[Publishing your software on Copr]
+ * xref:Package_Review_Process.adoc[Package Review Process]
+ ** xref:Policy_for_Stalled_Package_Reviews.adoc[Policy for Stalled Package Reviews]
+ * xref:Package_Renaming_Process.adoc[Package Renaming Process]
+diff --git a/modules/ROOT/pages/create-hello-world-rpm.adoc b/modules/ROOT/pages/create-hello-world-rpm.adoc
+new file mode 100644
+index 0000000..270ea01
+--- /dev/null
++++ b/modules/ROOT/pages/create-hello-world-rpm.adoc
+@@ -0,0 +1,263 @@
++include::{partialsdir}/attributes.adoc[]
++
++= How to Create a GNU Hello World RPM Package
++
++This is a short hands-on tutorial on writing RPM files, showing how to quickly set up and create simple source and binary software packages.
++It assumes some familiarity with using pre-made RPM packages, and with the FOSS building process.
++
++For comprehensive information on how to create RPM files, including more detailed tips, refer to xref:creating-rpm-packages.adoc[How to create an RPM package].
++If you plan to create an RPM package for the Fedora repository, follow the process for link:https://fedoraproject.org/wiki/Join_the_package_collection_maintainers[How to join the Fedora Package Collection Maintainers], including following the various Fedora guidance.
++
++This tutorial demonstrates packaging of the GNU "Hello World" project.
++While the C program printing "Hello World" to standard output is trivial, the GNU version contains most of the usual peripheral components associated with a typical FOSS project, including the configuration/build/install environment, documentation, internationalization, etc.
++The GNU version, however, traditionally consists of a `tar` file containing the source code and configure/make scripts, but it does not include the packaging information.
++Therefore, it's a reasonable vehicle to practice building RPMs on.
++
++== Development Environment
++
++To build RPMs we need a set of development tools.
++
++IMPORTANT: Make sure you run the following command as the `root` user!
++
++This is a one-time-only setup, installed by running these commands from a system administration (`root`) account:
++
++----
++# dnf install fedora-packager @development-tools
++----
++
++IMPORTANT: Make sure you run the following command as the `root` user!
++
++To be able to test the build procedure in a clean chroot you need to configure your non-privileged account to be a member of the 'mock' group:
++
++----
++# usermod -a -G mock <your username>
++----
++
++Those are the only commands requiring `root` privileges.
++All the remaining work should be done from your regular, non-privileged account, or even from a separate account created just for development work.
++Modern RPM-based systems, including Fedora, are set up to build and test RPM packages purely from within a non-privileged account.
++The following command sets up an RPM build area in your `~/rpmbuild` directory.
++This directory will contain several subdirectories, for the project source code, RPM configuration files and for the resulting source and binary packages.
++
++----
++$ rpmdev-setuptree
++----
++
++== Building a "Hello World" RPM
++
++We need the source code of the project we are packaging, often referred to as the 'upstream' source.
++We will download it from the project's website into the `~/rpmbuild/SOURCES` directory.
++We are getting the compressed tarball archive, which happens to be the preferred distribution form for most FOSS projects.
++
++----
++$ cd ~/rpmbuild/SOURCES
++$ wget http://ftp.gnu.org/gnu/hello/hello-2.10.tar.gz
++----
++
++The RPM package is configured by `.spec` files.
++We will create a template file `hello.spec` in the appropriate directory:
++
++----
++$ cd ~/rpmbuild/SPECS
++$ rpmdev-newspec hello
++----
++
++Recent versions of `Emacs` and `vi` have .spec file editing modes which will also bring up a similar template upon creating a new file.
++So you can just use the following command for example to use the template automatically.
++
++----
++$ emacs hello.spec
++----
++
++== Inside a Spec File
++
++The fields in our `.spec` file need slight editing.
++Please follow the xref:creating-rpm-packages.adoc[Fedora rules] for these fields.
++In our case, the file might start as follows:
++
++[source, RPMSpec]
++----
++Name:     hello
++Version:  2.10
++Release:  1
++Summary:  The "Hello World" program from GNU
++License:  GPLv3+
++URL:      https://www.gnu.org/software/hello/
++Source0:  https://ftp.gnu.org/gnu/hello/hello-%{version}.tar.gz
++
++%description
++The "Hello World" program, done with all bells and whistles of a proper FOSS
++project, including configuration, build, internationalization, help files, etc.
++
++%changelog
++* Thu Jul 07 2011 The Coon of Ty <Ty@coon.org> - 2.10-1
++- Initial version of the package
++----
++
++The `Version` should mirror the upstream, while `Release` numbers our work within Fedora.
++
++The first letter of the `Summary` should be uppercase to avoid `rpmlint` complaints.
++
++It is your responsibility to check the `License` status of the software, by inspecting the source files and/or their `LICENSE` files, and/or by talking to the authors.
++
++The `Group` tag was historically used to classify the package in accordance with the list in `/usr/share/doc/rpm-``/GROUPS`.
++It is being phased out so you will not see it added by default.
++However, it doesn't hurt to add it anyway.
++
++The `%changelog` should document the work on preparing the RPM, especially if there are security and bug patches included on top of the base upstream source.
++Changelog data can be displayed by `rpm --changelog -q `, which is very useful for instance to find out if specific bug and security patches were included in the installed software, thanks to the diligent Fedora packagers who include this info with the relevant https://cve.mitre.org/[CVE] numbers.
++
++The `%changelog` entry should include the version string to avoid `rpmlint` complaints.
++
++Multi-line sections like `%changelog` or `%description` start on a line under the directive, and end with a blank line.
++
++Lines which aren't needed (e.g. `BuildRequires` and `Requires`) can be commented out with a hash ('#') for now.
++
++Many lines in the template don't need to be changed at all in many cases, at least for the initial attempt.
++
++== Building the Package
++
++We are ready for the first run to build source, binary and debugging packages:
++
++----
++$ rpmbuild -ba hello.spec
++----
++
++It will complain and list the unpackaged files, i.e. the files that would be installed in the system that weren't declared as belonging to the package.
++We need to declare them in the `%files` section.
++Do not hardcode names like `/usr/bin/`, but use macros, like `%\{_bindir}/hello` instead.
++The manual pages should be declared in the `%doc` subsection:
++
++....
++%doc %{_mandir}/man1/hello.1.*
++....
++
++This is an iterative process; after editing the `.spec` file, rerun `rpmbuild`.
++
++Since our program uses translations and internationalization, we are seeing a lot of undeclared i18 files.
++
++The xref:packaging-guidelines:ROOT:index.adoc#_handling_locale_files[recommended method] to declare them is:
++
++* find the filenames in the `%install` step: `%find_lang %\{name}`
++* add the required build dependencies: `BuildRequires: gettext`
++* use the found filenames `%files -f %\{name}.lang`
++
++If the program uses GNU `info` files, you need to make sure the installation and uninstallation of the package does not interfere with other software on the system, by using this boilerplate:
++
++* delete the `dir` file in `%install`:
++
++----
++$ rm -f %{buildroot}%{_infodir}/dir
++----
++
++* `Requires(post): info` and `Requires(preun): info`
++* add those steps:
++
++[source,RPMSpec]
++----
++%post
++/sbin/install-info %{_infodir}/%{name}.info %{_infodir}/dir || :
++
++%preun
++if [ $1 = 0 ] ; then
++/sbin/install-info --delete %{_infodir}/%{name}.info %{_infodir}/dir || :
++fi
++----
++
++This snippet is copied directly from link:https://fedoraproject.org/wiki/Packaging:Scriptlets?rd=Packaging:ScriptletSnippets#Texinfo[here].
++That page contains solutions to many common packaging tasks.
++If possible, try to copy a solution from there instead of devising your own.
++
++== A Complete `hello.spec` File
++
++Here's the initial version of `hello.spec`:
++
++[source,RPMSpec]
++----
++Name:           hello
++Version:        2.10
++Release:        1%{?dist}
++Summary:        The "Hello World" program from GNU
++
++License:        GPLv3+
++URL:            http://ftp.gnu.org/gnu/%{name}
++Source0:        http://ftp.gnu.org/gnu/%{name}/%{name}-%{version}.tar.gz
++
++BuildRequires: gettext
++
++Requires(post): info
++Requires(preun): info
++
++%description
++The "Hello World" program, done with all bells and whistles of a proper FOSS
++project, including configuration, build, internationalization, help files, etc.
++
++%prep
++%autosetup
++
++%build
++%configure
++make %{?_smp_mflags}
++
++%install
++%make_install
++%find_lang %{name}
++rm -f %{buildroot}%{_infodir}/dir
++
++%post
++/sbin/install-info %{_infodir}/%{name}.info %{_infodir}/dir || :
++
++%preun
++if [ $1 = 0 ] ; then
++/sbin/install-info --delete %{_infodir}/%{name}.info %{_infodir}/dir || :
++fi
++
++%files -f %{name}.lang
++%{_mandir}/man1/hello.1.*
++%{_infodir}/hello.info.*
++%{_bindir}/hello
++
++%doc AUTHORS ChangeLog NEWS README THANKS TODO
++%license COPYING
++
++%changelog
++* Tue Sep 06 2011 The Coon of Ty <Ty@coon.org> 2.10-1
++- Initial version of the package
++----
++
++With this `.spec` file, you should be able to successfully complete the build process, and create the source and binary RPM packages.
++
++Next you should check them for conformance with RPM design rules, by running `rpmlint` on the `.spec` file and all RPMs:
++
++----
++$ rpmlint hello.spec ../SRPMS/hello* ../RPMS/*/hello*
++----
++
++If there are no warnings or errors, we've succeeded.
++Otherwise, use `rpmlint -i` or `rpmlint -I <error_code>` to see a more verbose description of the `rpmlint` diagnostics.
++
++== The `mock` Builds
++
++To check that the package build will succeed in the Fedora restricted build environment, check it with `mock`.
++The default `mock` configuration builds the package against Rawhide - the Fedora development branch.
++
++----
++$ mock --verbose ../SRPMS/hello-2.10-1.fc25.src.rpm
++----
++
++== References
++
++* xref:creating-rpm-packages.adoc[How to create an RPM package]
++
++* link:https://fedoraproject.org/wiki/Building_RPM_packages_(20090405)[Building RPM packages (20090405)]
++
++* link:https://fedoraproject.org/wiki/Using_Mock_to_test_package_builds[Using Mock to test package builds]
++
++* link:https://fedoraproject.org/wiki/Using_the_Koji_build_system[Using the Koji build system]
++
++== History
++
++Przemek Klosowski wrote this tutorial when he worked through link:https://fedoraproject.org/wiki/Building_RPM_packages_(20090405)[Christoph Wickert's IRC session on building RPMs] using Rahul Sundaram's suggestion of GNU "Hello World" as a test case.
++After he wrote up his experience, he found out about the excellent and extensive xref:creating-rpm-packages.adoc[How to create an RPM package] page on this wiki, as well as the Christian Lyder Jacobsen's website, which is unfortunately not available anymore.
++However, Christian isn't planning to update his site, and it seemed that a 5-minute 'fast food' alternative to the more extensive article might suit some people.
++More in-depth information on using and building RPM packages is available from link:dnf.adoc[other sources].
+diff --git a/modules/ROOT/pages/creating-rpm-packages.adoc b/modules/ROOT/pages/creating-rpm-packages.adoc
+new file mode 100644
+index 0000000..be6a9cd
+--- /dev/null
++++ b/modules/ROOT/pages/creating-rpm-packages.adoc
+@@ -0,0 +1,18 @@
++ifdef::context[:parent-context: {context}]
++:context: creating-rpm-packages
++[id='creating-rpm-packages']
++= Creating RPM packages
++
++include::{partialsdir}/unreviewed-message.adoc[]
++
++Learn the basics of RPM packaging.
++
++include::{partialsdir}/con_rpm_packaging_overview.adoc[leveloffset=+1]
++
++include::{partialsdir}/proc_rpm_preparing_your_system.adoc[leveloffset=+1]
++
++include::{partialsdir}/proc_rpm_creating_an_rpm.adoc[leveloffset=+1]
++
++include::{partialsdir}/con_rpm_spec_file_overview.adoc[leveloffset=+1]
++ifdef::parent-context[:context: {parent-context}]
++ifndef::parent-context[:!context:]
+diff --git a/modules/ROOT/pages/publish-rpm-on-copr.adoc b/modules/ROOT/pages/publish-rpm-on-copr.adoc
+new file mode 100644
+index 0000000..c44c665
+--- /dev/null
++++ b/modules/ROOT/pages/publish-rpm-on-copr.adoc
+@@ -0,0 +1,257 @@
++include::{partialsdir}/attributes.adoc[]
++
++= How to Publish your Software on Copr, Fedora's User Repository
++:toc:
++
++This is a short tutorial on how to create and maintain a Copr repository for your software in an automated fashion. It assumes some basic familiarity with Git & how to create a RPM package.
++
++In this guide, we'll
++
++- create a RPM package for a program
++
++- create a Copr repository and publish the program to it
++
++- set up automatic management of program version, package release and package changelog
++
++- set up automatic building of new package versions
++
++The aim is to let you keep your software up-to-date in Copr without ever having to interact with anything other than your software's git repository.
++
++TIP: You can set up similar automation when packaging someone else's program, i.e. building from a downloaded source tarball. The needed modifications are described xref:#_packaging_from_source_tarballs[at the end of the tutorial].
++
++== Prerequisites
++The following is needed:
++
++. Our program's source in a publicly available git repository somewhere. This tutorial uses a simple example program - hellocopr - to demonstrate the process.
++The program and all files referenced in this guide can be found in the link:https://pagure.io/copr-tito-quickdoc[project's git repository]. It's a very simple (& pointless) python program with a setuptools installer:
+++
++```
++user@host ~/copr-tito-quickdoc % ls
++doc  LICENSE  README.md  requirements.txt  setup.py  src
++
++user@host ~/copr-tito-quickdoc % ls src/hellocopr
++colors.py  hellocopr.py  __init__.py
++```
+++
++. A Fedora (FAS) account in order to be able to create repositories on Copr. This tutorial's demo repository can be found link:https://copr.fedorainfracloud.org/coprs/lcts/hellocopr/[here].
++
++. `tito` installed on your system. link:https://github.com/rpm-software-management/tito[Tito] is capable of a lot of advanced automation for package creation, most of which we won't need here. Check out its documentation to learn more.
++
++. A specfile for our program. For more information on how to create one, refer to xref:creating-rpm-packages.adoc[Creating RPM packages] and xref:create-hello-world-rpm.adoc[How to Create a GNU Hello World RPM Package] or adapt this tutorial's link:https://pagure.io/copr-tito-quickdoc/blob/master/f/doc/hellocopr.spec.annotated[annotated example specfile].
++
++TIP: You can follow along with this tutorial by cloning or forking the repository and checking out the `initial` tag. This will put the repository in the state just before the next step. The repo's commit history matches the steps followed in this tutorial.
++
++== Step 1: Creating the package using tito
++
++Copy link:https://pagure.io/copr-tito-quickdoc/c/00963ac9339a13eefd2ab1ca42b1f72af12d3cac?branch=master[the spec file] into the project's base directory. A few changes should be made before proceeding:
++
++. The values of `Version:` and `Release:` do not matter, since these will be managed by tito. It makes sense to set them to `Version: 0.0.0` and `Release: 0%\{?dist}` to mark that this package hasn't been built yet.
++
++. tito will also handle the creation of the source tarball from the git repository, so change the `Source0:` URL to the filename `%\{name}-%\{version}.tar.gz` & add a comment to tell users how to get the tarball
++
++. The changelog can be left empty.
+++
++```
++user@host ~/copr-tito-quickdoc % cat hellocopr.spec
++...
++Version: 0.0.0
++Release: 0%\{?dist}
++...
++# Sources can be obtained by
++# git clone https://pagure.io/copr-tito-quickdoc
++# cd copr-tito-quickdoc
++# tito build --tgz
++Source0: %\{name}-%\{version}.tar.gz
++...
++%changelog
++```
++
++Commit the changes.
++
++Next, we initialize the project for use with tito.
++
++```
++user@host ~/copr-tito-quickdoc % tito init
++Creating tito metadata in: ~/copr-tito-quickdoc/.tito
++   - created ~/copr-tito-quickdoc/.tito
++   - wrote tito.props
++   - created ~/copr-tito-quickdoc/.tito/packages
++   - wrote ~/copr-tito-quickdoc/.tito/packages/.readme
++   - committed to git
++Done!
++```
++
++This creates link:https://pagure.io/copr-tito-quickdoc/c/7a6919d3dd56943bb988a755f8233157965aa9bb?branch=master[a subdirectory `.tito` with some default configuration], which can be left unchanged for now.
++
++We can now do a test build of the package using `tito build`. Usually, tito will build from a tag, which we haven't created yet. However, using the `--test` flag, we can build from the most recent commit instead, which will be written to `/tmp/tito`:
++
++```
++user@host ~/copr-tito-quickdoc % tito build --rpm --test
++Creating output directory: /tmp/tito
++WARNING: unable to lookup latest package tag, building untagged test project
++WARNING: .tito/packages/hellocopr doesn't exist in git, using current directory
++Building package [hellocopr-0.0.0-0]
++Wrote: /tmp/tito/hellocopr-git-11.7a6919d.tar.gz
++...
++
++Successfully built: /tmp/tito/hellocopr-0.0.0-0.git.11.7a6919d.fc32.src.rpm
++	- /tmp/tito/noarch/hellocopr-0.0.0-0.git.11.7a6919d.fc32.noarch.rpm
++```
++
++Once we've fixed any issues with the package that might crop up, we can let tito create a package release using `tito tag`. Since we haven't set a proper version yet, we need to pass it to tito for the first tag:
++
++```
++user@host ~/copr-tito-quickdoc % tito tag --use-version 1.0.0
++```
++
++This will open the editor & display a pre-formatted changelog entry build up from all commits since the last release, which we can edit as needed. Since there have been none so far, the entry will just contain "- new package built with tito". Save the file, link:https://pagure.io/copr-tito-quickdoc/c/f44e81d695df669bcdb7237612baf41b80da98e0?branch=master[and tito will]
++
++. set the Version in the specfile to 1.0.0
++
++. set the Release in the specfile to 1
++
++. append the changelog entry to the specfile's `%changelog` section
++
++. commit the result and tag it with `<name>-<version>-<release>`, i.e. `hellocopr-1.0.0-1`
+++
++```
++user@host ~/copr-tito-quickdoc % tito tag --use-version 1.0.0
++Creating output directory: /tmp/tito
++Tagging new version of hellocopr: untagged -> 1.0.0-1
++Created tag: hellocopr-1.0.0-1
++   View: git show HEAD
++   Undo: tito tag -u
++   Push: git push --follow-tags origin
++```
++
++Push to the commits & tags to the remote using `git push --follow-tags`, and we're ready to release the package on Copr.
++
++== Step 2: Publishing the package in a Copr repository
++
++. Go to https://copr.fedorainfracloud.org/ and log in. Once done, click on _New Project_ to start creating a repository for our program. On the following input mask,
++
++.. Under _1. Project information_ -> _Project name_ set the name to what you want your repo to be called - since this will only contain a single package, it makes sense to use projectname = packagename, i.e. _hellocopr_. This is the only settings that cannot be changed later.
++
++.. Under _2. Build options_ tick all distributions you want to create repositories for - usually all Fedora versions & maybe EPEL versions as well
++
++.. Under _4. Other Options_ make sure that _Follow Fedora branching_ is ticked, this will ensure that your repository will automatically update for new Fedora release.
++
++. Go to _Packages_ -> _New Package_
++
++.. Under _1. Provide the source_, set the package name & the URL of your git repository
++
++.. Under _2. How to build SRPM from the source_ select _tito_
++
++.. Under _3. Generic package setup_ tick the box for _Auto-rebuild_
++
++. Your package will appear in the list of packages. Hit _Rebuild_ to trigger a build. The following page lets you change any build options if necessary, we'll just use the defaults, i.e. the options we set in the previous step. Hit _Submit_ and Copr will build the package from the tito tag we created in Step 1.
++
++Once the build has finished, you can test installing the package from Copr by activating your repository.
++```
++user@host ~/copr-tito-quickdoc % sudo dnf copr enable <username>/hellocopr
++
++user@host ~/copr-tito-quickdoc % sudo dnf install hellocopr
++```
++
++== Step 3: Automate package (re)-builds
++
++Next, we want to set up Copr to automatically build a new package version whenever we create one, so that we no longer need to log in and trigger one manually. To achieve this, we simply need to trigger a build whenever we push a new tag to the repository.
++
++This requires some configuration both of your Git repository and of the Copr project.
++
++Configuration can be found under _Settings_ -> _Integrations_, the page also explains the steps to configure your git repository for all common Git forges (Pagure, Github, Gitlab & Bitbucket).
++
++Now, to test this, let's make some changes to our program that will come in handy for the final layer of automation and create a new release for our software.
++
++Currently, the example program has its version hardcoded at multiple places. link:https://pagure.io/copr-tito-quickdoc/c/61abf1cdf622d8c9fb4f03eb6b06c4ddc1677362?branch=master[Let's change this] so that the version string is sourced from a single file. Which file this is doesn't matter, but ideally the version variable should be the only thing in it that is likely to change. In this case, we use the previously empty `src/hellocopr/pass:[__]initpass:[__].py`. We name this new version '1.0.1'.
++
++Commit the changes, and create a new release with tito
++```
++user@host ~/copr-tito-quickdoc % tito tag
++Creating output directory: /tmp/tito
++Tagging new version of hellocopr: 1.0.0-1 -> 1.0.1-1
++Created tag: hellocopr-1.0.1-1
++   View: git show HEAD
++   Undo: tito tag -u
++   Push: git push --follow-tags origin
++```
++Note that by ommiting the `--use-version` option, tito now updates the version automatically. It does so by
++
++. Increasing the Version's final digit by 1 - `1.0.0` -> `1.0.1`
++. Resetting the Release to 1 it it isn't already.
++
++If you want to bump to a different version, say `1.1.0`, you can do so again by passing `--use-version`.
++
++Push the resulting commit & tag, and if you now check your projects page on Copr, you'll see that a new build of `hellocopr-1.0.1-1` has been triggered by our pushing a tag.
++
++== Step 4: Let tito manage the program version
++
++If you check the git log, you'll find that I actually forgot to update hellocopr's version variable to 1.0.1. We don't want that to happen again. Luckily, since we single-source our version, we can let tito automatically generate this file from a template.
++
++First, copy the version source file `src/hellocopr/pass:[__]initpass:[__].py` to `.tito/templates/pass:[__]initpass:[__].py.template`. Then, open the template file and replace the version string with `$version`. It also makes sense to add a note that the file is managed by tito and should not be edited manually.
++```
++user@host ~/copr-tito-quickdoc % cat .tito/templates/__init__.py.template
++...
++# This file is automatically created from a template by tito. Do not edit it manually.
++
++__version__ = '$version'
++```
++
++Next, add the following to `.tito/tito.props`
++```
++[version_template]
++destination_file = src/hellocopr/__init__.py
++template_file = .tito/templates/__init__.py.template
++```
++https://pagure.io/copr-tito-quickdoc/c/28600f6e41d5a4b60f2e47cf077f2fe2d9224e1d?branch=master[Commit the changes]. Now, when we tag a new release, tito will take the template, replace `$version` with whatever version was tagged, and copy the resulting file to `src/hellocopr/pass:[__]initpass:[__].py` before updating the spec file and commiting the changes.
++
++We can test this by tagging a new release:
++```
++user@host ~/copr-tito-quickdoc % % tito tag
++Creating output directory: /tmp/tito
++Tagging new version of hellocopr: 1.0.1-1 -> 1.0.2-1
++Created tag: hellocopr-1.0.2-1
++   View: git show HEAD
++   Undo: tito tag -u
++   Push: git push --follow-tags origin
++
++user@host ~/copr-tito-quickdoc % cat src/hellocopr/__init__.py
++...
++# This file is automatically created from a template by tito. Do not edit it manually.
++
++__version__ = '1.0.2'
++```
++If you again push the tag to the remote repo, Copr will again automatically trigger a rebuild.
++
++== Release procedure in brief
++From now on, updating your software in the Copr repository is as simple as
++
++. Commit all changes for your new version.
++. Perform a test build using `tito build --test`
++. Tag the release with `tito tag` (add `--use-version` if necessary)
++. Push the tag to your git repo using `git push --follow-tags`
++
++and Copr will take care of the rest.
++
++== Packaging from source tarballs
++
++You can use a similar process to manage someone elses software on Copr, i.e. build from a tarball downloaded from upstream.
++
++To do so, the following changes need to be made to the procedure described above:
++
++. Instead of the unpacked sources, download & commit the source tarball you want to package to your repository
++. Instead of modifying the source directly, add any changes you need to make in the form of patch files. List these as `PatchX:` in the spec file
++. Also in the spec file, set the `Version:` back to whatever version the program is at and `Source0:` back to the tarball URL. You can use macros like `%\{version}` for the latter to automatically follow version changes.
++. Modify tito's `.tito/tito.props` to, one, not try to build a source tarball and two, bump the `Release:` instead of the `Version:` when tagging
+++
++```
++[buildconfig]
++builder = tito.builder.NoTgzBuilder
++tagger = tito.tagger.ReleaseTagger
++```
+++
++. Don't do any tito templating
++
++The rest of the procedure stays the same. If you make changes to the package without changing the source, you can just tag a new release with tito. If you do update the source tarball, you need to update the `Version:` field and reset `Release:` to `0%\{?dist}` before tagging.
++
++TIP: The tarball-adapted version of the project can be found in the `https://pagure.io/copr-tito-quickdoc/tree/foreign-sources[foreign-sources]` branch of the git repo.
+diff --git a/modules/ROOT/partials/.#attributes.adoc b/modules/ROOT/partials/.#attributes.adoc
+new file mode 120000
+index 0000000..642a443
+--- /dev/null
++++ b/modules/ROOT/partials/.#attributes.adoc
+@@ -0,0 +1 @@
++iago@telaar.localdomain.99434:1629619821
+\ No newline at end of file
+diff --git a/modules/ROOT/partials/attributes.adoc b/modules/ROOT/partials/attributes.adoc
+index f5420a7..0bf5a87 100644
+--- a/modules/ROOT/partials/attributes.adoc
++++ b/modules/ROOT/partials/attributes.adoc
+@@ -1 +1,2 @@
+ :year: 2021
++:MAJOROSVER: 34
+\ No newline at end of file
+diff --git a/modules/ROOT/partials/con_rpm_packaging_overview.adoc b/modules/ROOT/partials/con_rpm_packaging_overview.adoc
+new file mode 100644
+index 0000000..4521e14
+--- /dev/null
++++ b/modules/ROOT/partials/con_rpm_packaging_overview.adoc
+@@ -0,0 +1,49 @@
++[[rpm-packaging-overview]]
++= RPM Packaging Overview
++
++Use this guide to create RPM packages and `.spec` files. Despite the focus on Fedora, you can apply much of this document to other RPM-based distributions.
++
++NOTE: For a general-purpose RPM building guide for packagers on Fedora, CentOS, and Red Hat Enterprise Linux, see the https://rpm-packaging-guide.github.io/[RPM Packaging Guide].
++
++For more information about packaging guidelines, see the following guides:
++
++* https://docs.fedoraproject.org/en-US/packaging-guidelines/[Packaging Guidelines]
++* https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/[Licensing Guidelines]
++* https://docs.fedoraproject.org/en-US/packaging-guidelines/Naming/[Package Naming Guidelines]
++* https://docs.fedoraproject.org/en-US/packaging-guidelines/DistTag/[Dist Tag Guidelines]
++* https://docs.fedoraproject.org/en-US/packaging-guidelines/ReviewGuidelines/[Package Review Guidelines]
++* https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/[Recipes for RPM scriptlets]
++
++
++If you plan to submit a package to the official Fedora repository, follow the procedure in https://fedoraproject.org/wiki/Join_the_package_collection_maintainers[Join the package collection maintainers].
++
++Before you begin, select a text editor that you want to use, and ensure that you understand the following terminology. 
++
++[[rpm-terminology]]
++== RPM terminology
++
++RPM::
++The package manager used by Fedora, Red Hat Enterprise Linux, Mageia, OpenSUSE and others. Originally RPM stood for "Red Hat Package Manager" but now it is a recursive acronym "RPM Package Manager".
++
++spec file::
++A plain text file that contains information about a package and instructions that RPM uses for compiling the package's software. To name the file, use the name of the package with the file extension `.spec`.
++
++tag::
++A string, generally capitalized and followed by a colon, which appears at the top of the `.spec` file to provide some important data about the RPM, such as `Name:`, `Version:` or `Summary:`.
++
++section::
++A segment of the `.spec` file that tells RPM how to perform some portion of the package construction process. Many, but not all, sections contain code that is simply passed to the shell, though RPM has significant flexibility around this that is outside of the scope of this document.
++
++section header::
++A short string, starting with `%` at the beginning of a line, which introduces a section. Examples include `%description`, `%prep` and `%files`.
++
++macro::
++A short string, always prefixed by `%` and generally surrounded by curly brackets `{}` which RPM converts to a different and usually longer string. Some macros can take arguments and some arguments are quite complex. Some macros are provided by RPM, some are part of https://apps.fedoraproject.org/packages/redhat-rpm-config[redhat-rpm-config] and https://apps.fedoraproject.org/packages/fedora-rpm-macros[fedora-rpm-macros] packages, but many other packages also provide macros. You can run `rpm --showrc` to view all of the macros currently available on your system, but you do not need to run most of the macros you see there. 
+++
++For a full list of guidelines related to macros, see https://docs.fedoraproject.org/en-US/packaging-guidelines/RPMMacros/[Macros] in the Packaging Guidelines.
++
++mock::
++A system for building RPMs locally within your own Fedora installation. This avoids the need to install a full set of build dependencies on your operating system installation, and allows you to build packages for different Fedora releases.
++
++koji::
++The main Fedora build system: https://koji.fedoraproject.org[1].
+diff --git a/modules/ROOT/partials/con_rpm_spec_file_overview.adoc b/modules/ROOT/partials/con_rpm_spec_file_overview.adoc
+new file mode 100644
+index 0000000..17c810a
+--- /dev/null
++++ b/modules/ROOT/partials/con_rpm_spec_file_overview.adoc
+@@ -0,0 +1,106 @@
++[[con_rpm-spec-file-overview]]
++= RPM spec file overview
++
++Use this guide for information about the specific macros in a `.spec` file.
++
++NOTE: You can use the macros `%\{name}`, `%\{version}` and `%\{release}` to refer to the Name, Version and Release tags respectively. When you change the tag, the macros automatically update to use the new value.
++
++`Name`::
++Add the base name of the package, which must match the `.spec` file name. Follow the https://fedoraproject.org/wiki/Packaging:Naming[Package Naming Guidelines] and write the file name in lower-case letters.
++
++`Version`::
++Add the upstream version number. See https://docs.fedoraproject.org/en-US/packaging-guidelines/Versioning/[Package Versioning]. If the version contains tags that are non-numeric, you might need to include the non-numeric characters in the `Release` tag. If upstream uses full dates to distinguish versions, consider using version numbers of the form. For example, `yy.mm[dd]` where `2008-05-01` becomes `8.05`.
++
++`Release`::
++Set the initial value to `1%\{?dist}`. Increment the number every time you release a new package for the same version of software. When a new upstream version is released, change the `Version` tag to match and reset the `Release` number to `1`. For more information, see the https://docs.fedoraproject.org/en-US/packaging-guidelines/Versioning/[Versioning Guide] of the packaging guidelines.
++
++`Summary`::
++Enter a brief, one-line summary of the package. Use American English. Do not end with a period.
++
++`Group`::
++This tag is deprecated since Fedora 17. See https://docs-old.fedoraproject.org/en-US/Fedora_Draft_Documentation/0.1/html/Packagers_Guide/chap-Packagers_Guide-Spec_File_Reference-Preamble.html[Spec
++File Reference Preamble]
++
++`License`::
++Enter an open source software license. Do not use the old Copyright tag. Use a standard abbreviation, for example, `GPLv2+` and be specific. For example, use `GPLv2+` for GPL version 2 or greater rather than `GPL` or `GPLv2` where it's true. For more information, see the https://docs.fedoraproject.org/en-US/packaging-guidelines/LicensingGuidelines/[Licensing Guidelines].
+++
++You can list multiple licenses by combining them with `and` and `or` (e.g. `GPLv2 and BSD`).
++
++`URL`::
++The full URL for more information about the program. For example, the project website.
+++
++NOTE: Do not add a link to the original source code. Add the link to the source code to the `Source0` tag.
++
++`Source0`::
++Enter the full URL for the compressed archive that contains the original, pristine source code, as upstream released it. "`Source`" is synonymous with "`Source0`".
+++
++The full URL basename is used when looking in the `SOURCES` directory. If possible, embed `%\{name}` and `%\{version}`, so that changes to the  go to the right place. Preserve the timestamps when downloading source files. For more information, see https://docs.fedoraproject.org/en-US/packaging-guidelines/#_timestamps[Preserve timestamps].
+++
++If there is more than one source, name them `Source1`, `Source2`.
+++
++If you add whole new files in addition to the pristine sources, list them as sources after the pristine sources. A copy of each of these sources is included in any source RPM (SRPM) you create, unless you specifically direct otherwise. For more information on special cases, for example, revision control, see https://fedoraproject.org/wiki/Packaging:SourceURL?rd=Packaging/SourceURL[Source URL].
++
++`Patch0`::
++Enter the name of the first patch to apply to the source code. If you must patch the files after you extract them, edit the files and save their differences as a `.patch` file in your `~/rpmbuild/SOURCES` directory. Patches must make only one logical change each, so it's quite possible to have multiple patch files.
++
++`BuildArch`::
++If you package files that are architecture-independent, for example shell scripts, data files, then add `BuildArch: noarch`. The architecture for the binary RPM is then `noarch`.
++
++`BuildRoot`::
++This is now redundant in Fedora and is only needed for EPEL5. By default, the build root is placed in `%\{_topdir}/BUILDROOT/`.
+++
++In EPEL5, this is where files are installed during the %install process (after the %build process).
++
++`BuildRequires`::
++Add a comma-separated list of packages that are required for compiling the program. Usually, this field is repeated on multiple lines. These dependencies are not automatically determined. You must include everything that the package needs to build the program.
+++
++Verify that you have specified all the necessary build requirements by performing a "mock build" of your package. You can specify a minimum version if necessary, for example, `ocaml >= 3.08`.
+++
++If you need the file `/EGGS`, determine the package that owns it by running `rpm -qf /EGGS`.
+++
++If you need the program `EGGS`, determine the package that owns it by running `rpm -qf \`which EGGS\``. Keep dependencies to a minimum. For example, use `sed` instead of `perl` if you do not need Perl, but note that some applications permanently disable functions if the associated dependency is not present; in those cases you might need to include the additional packages.
++
++`Requires`::
++Enter a comma-separate list of packages that are required when the program is installed. Note that the `BuildRequires` tag lists what is required to build the binary RPM, while the `Requires` tag lists what is required when installing and running the program; a package may be in one list or in both.
++
++`%description`::
++Enter a longer, multi-line description of the program. Use American English. All lines must be 80 characters or less. Blank lines indicate a new paragraph.
+++
++Some graphical user interface installation programs reformat paragraphs; lines that start with whitespace might be treated as preformatted text and displayed as is, normally with a fixed-width font.
++
++`%prep`::
++Add script commands to "prepare" the program. For example, to extract the program, so that it is ready for building. Typically this is just `%autosetup`; a common variation is `%autosetup -n NAME` if the source file unpacks into `NAME`.
++
++`%build`::
++Add script commands to compile the program and get it ready for installing. The program must come with instructions on how to do this.
++
++`%install`::
++Add script commands to "install" the program. The commands must copy the files from the `BUILD` directory `%\{_builddir}` into the buildroot directory, `%\{buildroot}`.
++
++`%check`::
++Add script commands to "test" the program. This is run after the `%install` procedure, so place it there if you have this section. Often it contains `make test` or `make check`. This is separated from `%build` so that people can skip the self-test if they desire.
++
++`%clean`::
++Note that this section is now redundant in Fedora and is only necessary for EPEL. Typically this contains only the following command: `rm -rf %\{buildroot}`.
++
++`%files`::
++Add the list of files to be installed.
++
++`%changelog`::
++Add changes in the package. Use the format example above. Do not put software's change log here. This change log is only for the RPM.
++
++`ExcludeArch`::
++If the package does not successfully compile, build or work on a particular architecture, list those architectures under this tag.
++
++RPM also supports the creation of several packages called subpackages from a single `.spec` file, such as `name-libs` and `name-devel` packages.
++
++Do *not* create a "relocatable" package; they do not add value in Fedora and make things more complicated.
++
++
++.Inserting comments
++
++* Insert comments with a leading `#` character, and beware of macros (beginning with `%`) that are potentially multi-line, as they are expanded first.
++
++* When commenting out a line, double the percent signs (`%%`) of the macros appearing after the `#`.
++
++* Avoid inline comments on the same line as script commands.
+diff --git a/modules/ROOT/partials/proc_rpm_creating_an_rpm.adoc b/modules/ROOT/partials/proc_rpm_creating_an_rpm.adoc
+new file mode 100644
+index 0000000..3438238
+--- /dev/null
++++ b/modules/ROOT/partials/proc_rpm_creating_an_rpm.adoc
+@@ -0,0 +1,142 @@
++[[creating_rpm_package]]
++= Creating an RPM package
++:experimental:
++include::{partialsdir}/attributes.adoc[]
++
++.Overview
++
++To create an RPM package, you must complete the following steps:
++
++. Create a directory to store the package. Within the package directory, create a `.spec` file.
++. In the `.spec` file, add information about your software, instructions for unpacking it, building it, and installing it, as well as a list of files that are in the package.
++. Run the `fedpkg` command with the appropriate options to build your package.
++
++. To create a directory, add a package, and within the package, create a simple program, enter the following commands:
+++
++[source,shell,subs="attributes"]
++----
++mkdir -p ~/packaging-work/howdy
++cd ~/packaging-work/howdy
++cat << EOF > howdy
++#!/bin/bash
++echo "Howdy, partner!"
++EOF
++chmod 644 howdy
++----
+++
++NOTE: The directory `packaging-work`, the package `howdy`, and program `howdy` names are for example purposes. Edit these names to suit your project. You can use any location you want but the directory name for the package should match the name of the package.
+++
++. To verify that everything built correctly, enter the following command:
+++
++[source,shell,subs="attributes"]
++----
++$ bash ./howdy
++----
+++
++. Create a new file `howdy.spec` and open `howdy.spec` in your text editor. Populate the `howdy.spec` file using the following example as a guide but change anything you require:
+++
++NOTE: Then you create the file, use spaces and do not use tabs to align the text.
+++
++[source]
++----
++Name:    howdy
++Version: 1
++Release: 1%{?dist}
++Summary: Say hello, Texas style
++
++License: Public Domain
++Source0: howdy
++
++%description
++A simple program to greet the user, Texas style.
++
++%install
++
++%files
++
++%changelog
++----
+++
++. To instruct the package how to install the program, add the following information to the `%install` section of the `.spec` file. Add the information to the line that follows `%install`:
+++
++[source]
++----
++mkdir -p %{buildroot}%{_bindir}
++install -p -m 755 %{SOURCE0} %{buildroot}%{_bindir}
++----
+++
++NOTE: In this example, we use the following three macros: `%\{buildroot}`, `%\{_bindir}`, and `%\{SOURCE0}`. This method ignores the origin of the files and directories and focuses on the destination of the files. Without `%\{buildroot}` the files might install directly onto your development machine. This is not recommended, especially if you run as root. For more information on macros and `.spec` file entries, see xref:con_rpm_spec_file_overview[].
+++
++. To tell RPM about the file, enter the following information to the `%files` section:
+++
++[source]
++----
++ %{_bindir}/howdy
++----
+++
++NOTE: In general, the `%files` section is about files you have installed into the buildroot. You do not use the `%\{buildroot}` macro when listing files there.
+++
++. Save your edits and to run a local build, enter the following command:
+++
++[source,shell,subs="attributes"]
++----
++$ fedpkg --release f{MAJOROSVER} local
++----
++
++This updates the two RPMs.
++
++.Adding no architecture dependencies
++
++In this example, the package is a shell script, and there is no requirement for the package to build separately on every architecture that Fedora supports.
++
++. To specify that this package is independent of architectures, open the file in your text editor and add the following information after the `Source0:` line:
+++
++[source]
++----
++BuildArch: noarch
++----
+++
++. Delete the existing `.rpm` files in this directory and run another local build:
+++
++[source,shell,subs="attributes"]
++----
++$ fedpkg --release f{MAJOROSVER} local
++----
++
++.Result
++
++After you complete the procedure, ensure that you have the following two files:
++
++. One source file that contains the latest source.
++. One binary file with the `.noarch.rpm`.
++
++.What to do next
++
++Validate your RPM package with RPM lint, using the following command:
++
++[source,shell,subs="attributes"]
++----
++$ fedpkg --release f{MAJOROSVER} lint
++----
++
++At this stage, there are four or more errors because of the lack of `%prep`, `%build` sections, and `URL` tag.
++
++To view the list of dependencies, enter the following command:
++
++[source,shell,subs="attributes"]
++----
++$ rpm -qp --requires howdy-1-1.fc{MAJOROSVER}.noarch.rpm
++----
++
++RPM adds some internal `rpmlib` dependencies, and one in `/bin/bash` which matches up with the first line of the howdy program.
++
++To view a list of what the RPM provides, enter the following commnad:
++
++[source,shell,subs="attributes"]
++----
++$ rpm -qp --provides howdy-1-1.fc{MAJOROSVER}.noarch.rpm
++----
++
++This command is more important when your RPM package gains complexity and has dependencies.
++
++For more information about building a more complete and complex RPM package, see https://fedoraproject.org/wiki/How_to_create_a_GNU_Hello_RPM_package[How to create a GNU Hello RPM package].
+diff --git a/modules/ROOT/partials/proc_rpm_preparing_your_system.adoc b/modules/ROOT/partials/proc_rpm_preparing_your_system.adoc
+new file mode 100644
+index 0000000..9b29293
+--- /dev/null
++++ b/modules/ROOT/partials/proc_rpm_preparing_your_system.adoc
+@@ -0,0 +1,34 @@
++[[preparing-your-system-to-create-rpm-packages]]
++= Preparing your system to create RPM packages
++
++Before you create RPM packages on Fedora, you must install packaging tools and set up any accounts that you want to use.
++
++For general information about preparing your environment, understanding source code, building and patching software, see the https://rpm-packaging-guide.github.io/#preparing-software-for-packaging[Preparing Software for Packaging] section in the RPM packaging guide.
++
++This installs the utilities that you require to work with and build packages in the same manner as official Fedora packages, including the tool that the package reviewers use to check package quality.
++
++To prepare your build environment to create RPM packages, complete the following steps:
++
++NOTE: You must run the following two commands as the root user.
++
++. Install the _fedora-packager_ and _fedora-review_ tools:
+++
++------------
++# dnf install fedora-packager fedora-review
++------------
+++
++. Add yourself to the *mock* group:
+++
++-----------
++# usermod -a -G mock yourusername
++-----------
+++
++. Log out and back in for this change to take effect.
++
++. Run the `id` command to verify that the *mock* group appears in your group list:
+++
++----------------
++$ id
++----------------
++
++NOTE: You can also create a separate user and use it for doing RPM development. Ensure that the user is part of the *mock* group and enters the `fedora-packager-setup` command.
+diff --git a/modules/ROOT/partials/unreviewed-message.adoc b/modules/ROOT/partials/unreviewed-message.adoc
+new file mode 100644
+index 0000000..0ec276a
+--- /dev/null
++++ b/modules/ROOT/partials/unreviewed-message.adoc
+@@ -0,0 +1,17 @@
++////
++
++This message needs to be included on any document that has been converted from the Wiki but not reviewed for technical accuracy.
++Add the following line verbatim to the top of any such document - below the top level heading:
++
++include::{partialsdir}/unreviewed-message.adoc[]
++
++Please do not change this message without consultation. Thanks!
++
++////
++
++[CAUTION]
++====
++This page has been converted from the Fedora Project Wiki and cleaned up for publishing here on the Fedora Docs Portal, but it has not yet been reviewed for technical accuracy.
++This means any information on this page may be outdated or inaccurate.
++Reviews for technical accuracy are greatly appreciated. If you want to help, see the link:https://pagure.io/fedora-docs/quick-docs/blob/master/f/README.md[README] file in the source repository for instructions.
++====
+-- 
+2.32.0
+

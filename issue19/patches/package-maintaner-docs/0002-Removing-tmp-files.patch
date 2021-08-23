@@ -1,0 +1,21 @@
+From 3c3228384d2fdfde8384a3d95f526a77afb72ab7 Mon Sep 17 00:00:00 2001
+From: "Yago Rubio (iago)" <iago@iagorubio.com>
+Date: Mon, 23 Aug 2021 21:56:36 +0200
+Subject: [PATCH 2/2] Removing tmp files
+
+---
+ modules/ROOT/.#nav.adoc | 1 -
+ 1 file changed, 1 deletion(-)
+ delete mode 120000 modules/ROOT/.#nav.adoc
+
+diff --git a/modules/ROOT/.#nav.adoc b/modules/ROOT/.#nav.adoc
+deleted file mode 120000
+index 87c459b..0000000
+--- a/modules/ROOT/.#nav.adoc
++++ /dev/null
+@@ -1 +0,0 @@
+-iago@telaar.localdomain.99824:1629619821
+\ No newline at end of file
+-- 
+2.32.0
+
